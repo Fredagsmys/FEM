@@ -6,16 +6,18 @@ import math
 import rungekutta4 as rk4
 from scipy.sparse.linalg import inv
 from time import time 
+from assignment_1 import jacobi_setup,jacobi_solve,conjugate_gradient_solve
+import scipy.sparse.linalg as spsplg
+import scipy
 
 
 def my_mass_matrix_assembler(x):
     N = len(x) - 1 
     M = spsp.dok_matrix((N+1, N+1)) # initialize stiffness matrix
-    # M = np.zeros((N+1,N+1))
     
-    for i in range(N):              # loop over elements
-        h = x[i+1] - x[i]           # element length
-        M[i, i] += 2*h/6              # assemble element stiffness
+    for i in range(N):              
+        h = x[i+1] - x[i]           
+        M[i, i] += 2*h/6              
         M[i, i+1] += h/6
         M[i+1, i] += h/6
         M[i+1, i+1] += 2*h/6
@@ -46,24 +48,40 @@ xr = 1
 a = 1
 T = 10**(-5)
 
-def run_sim(show_animation=False):
+def run_sim(N=2000, show_animation=False, solver = "jacobi"):
     t = 0
-    N = 2000                       # number of intervals
-    
     h = (xr-xl)/(N-1)                           # mesh size
     x = np.arange(xl, xr, h)                # node coords
     A = my_stiffness_matrix_assembler(x)
     M = my_mass_matrix_assembler(x)
     # equation is M*xi_t = -A*xi
     # Minv = np.linalg.inv(M)
-    Minv = splg.inv(M)
-    MA = -Minv@A
+    # Minv = splg.inv(M)
+    # MA = -Minv@A
 
-    def rhs(u):
-        
-        res = MA@u
-        # structure: u_t = -M^-1*A*u
-        return res
+    if solver == "jacobi":
+        Dinv, LplusU = jacobi_setup(M)
+
+    elif solver == "lu":
+        lu = spsplg.splu(A)
+
+    def rhs(xi):
+        b2 = -A@xi
+        # guess = np.random.rand(b2.shape[0])
+        # guess = None
+        guess = xi
+        if solver == "jacobi":
+            xi_t, iters = jacobi_solve(Dinv=Dinv, L_plus_U=LplusU, b=b2, x0=guess)
+        elif solver == "cg":
+            xi_t, iters = conjugate_gradient_solve(A=M, b=b2, x0=guess)
+        elif solver == "lu":
+            xi_t = lu.solve(b2)
+        elif solver == "analytical":
+            xi_t = spsplg.spsolve(M, b2)
+        # res = MA@xi
+        # structure: M*xi_t = A*xi
+        # print(iters)
+        return xi_t
 
     # error = np.linalg.norm(exact_prime,2) - xi.T@A@xi
     ht_try = 0.1*math.sqrt(a)*h**2
@@ -78,7 +96,7 @@ def run_sim(show_animation=False):
         title = plt.title(f't = {0:.2f} microseconds')
         plt.draw()
         plt.pause(1)
-
+    tstart = time()
     for tidx in range(mt-1):
         xi, t = rk4.step(rhs, xi, t, ht)
         
@@ -87,6 +105,7 @@ def run_sim(show_animation=False):
             title.set_text(f't = {t*1E6:.2f} microseconds')
             plt.draw()
             plt.pause(1e-8)
+    print(f"N = {N}. Runtime for solver: {solver}: {time()-tstart} s")
     return xi,x
 
 
@@ -102,11 +121,22 @@ def plot_exact(xi,x):
     plt.show()
     
 
+def runAll(N, show_anim = False):
+    solvers = ["cg", "jacobi", "lu", "analytical"]
+
+    for solver in solvers:
+        
+        xi,x = run_sim(N, show_animation=show_anim, solver=solver)
+        if show_anim:
+            plot_exact(xi,x)
+
 def main():
-    tstart = time()
-    xi,x = run_sim(show_animation=True)
-    print(f"runtime: {time()-tstart}s")
-    plot_exact(xi,x)
+    np.random.seed(1)
+    meshs = [2000, 4000, 8000]
+    # for N in meshs:
+    #     runAll(N)
+    xi,x = run_sim(16000, show_animation=False, solver="cg")
+    # plot_exact(xi,x)
 
 if __name__ == '__main__':
     main()  
