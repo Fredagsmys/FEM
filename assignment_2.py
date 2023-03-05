@@ -1,14 +1,12 @@
 import numpy as np
 import scipy.sparse as spsp
-import scipy.sparse.linalg as splg
 import matplotlib.pyplot as plt
 import math
 import rungekutta4 as rk4
-from scipy.sparse.linalg import inv
 from time import time 
 from assignment_1 import jacobi_setup,jacobi_solve,conjugate_gradient_solve
 import scipy.sparse.linalg as spsplg
-import scipy
+import numpy.linalg as nplg
 
 
 def my_mass_matrix_assembler(x):
@@ -22,7 +20,7 @@ def my_mass_matrix_assembler(x):
         M[i+1, i] += h/6
         M[i+1, i+1] += 2*h/6
 
-    M[0, 0] = 1E6                 # adjust for BC
+    M[0, 0] = 1E6                # adjust for BC
     M[N, N] = 1E6
     return M.tocsr()
 
@@ -36,13 +34,9 @@ def my_stiffness_matrix_assembler(x):
         A[i, i+1] += -1/h
         A[i+1, i] += -1/h
         A[i+1, i+1] += 1/h
-    A[0, 0] = 1E6                 # adjust for BC
-    A[N, N] = 1E6
-    # A[0, 0] = 1                 # adjust for BC
-    # A[N, N] =1
     return A.tocsr()
 
-k = 100*2*np.pi
+k = 10*2*np.pi
 xl = 0                                 # left end point of interval
 xr = 1 
 a = 1
@@ -51,41 +45,36 @@ T = 10**(-5)
 def run_sim(N=2000, show_animation=False, solver = "jacobi"):
     t = 0
     h = (xr-xl)/(N-1)                           # mesh size
-    x = np.arange(xl, xr, h)                # node coords
+    x = np.arange(xl, xr+h, h)                # node coords
     A = my_stiffness_matrix_assembler(x)
     M = my_mass_matrix_assembler(x)
     # equation is M*xi_t = -A*xi
-    # Minv = np.linalg.inv(M)
-    # Minv = splg.inv(M)
-    # MA = -Minv@A
 
     if solver == "jacobi":
         Dinv, LplusU = jacobi_setup(M)
 
     elif solver == "lu":
-        lu = spsplg.splu(A)
+        lu = spsplg.splu(M)
 
     def rhs(xi):
-        b2 = -A@xi
-        # guess = np.random.rand(b2.shape[0])
-        # guess = None
+        b = -A@xi
+        b[0] = 0
+        b[-1] = 0 
+
         guess = xi
         if solver == "jacobi":
-            xi_t, iters = jacobi_solve(Dinv=Dinv, L_plus_U=LplusU, b=b2, x0=guess)
+            xi_t, iters = jacobi_solve(Dinv=Dinv, L_plus_U=LplusU, b=b, x0=guess)
         elif solver == "cg":
-            xi_t, iters = conjugate_gradient_solve(A=M, b=b2, x0=guess)
+            xi_t, iters = conjugate_gradient_solve(A=M, b=b, x0=guess)
         elif solver == "lu":
-            xi_t = lu.solve(b2)
+            xi_t = lu.solve(b)
         elif solver == "analytical":
-            xi_t = spsplg.spsolve(M, b2)
-        # res = MA@xi
+            xi_t = spsplg.spsolve(M, b)
         # structure: M*xi_t = A*xi
-        # print(iters)
         return xi_t
 
-    # error = np.linalg.norm(exact_prime,2) - xi.T@A@xi
     ht_try = 0.1*math.sqrt(a)*h**2
-    mt = int(np.ceil(T/ht_try)+1) # round up so that (mt-1)*ht = T
+    mt = int(np.ceil(T/ht_try)+1)
     tvec, ht = np.linspace(0, T, mt, retstep=True)
     xi = np.sin(k*x)
     if show_animation:
@@ -111,32 +100,59 @@ def run_sim(N=2000, show_animation=False, solver = "jacobi"):
 
 def plot_exact(xi,x):
     fig, ax = plt.subplots()
-    [line] = ax.plot(x, xi, label='Approximation')
     ax.set_xlim([xl, xr])
     ax.set_ylim([np.min(xi)*2, np.max(xi)*2])
-    title = plt.title(f't = {T*1E6:.2f} microseconds')
+    plt.title(f't = {T*1E6:.2f} microseconds')
     exact = np.sin(k*x)*np.exp(-a*k**2*T)
+    print(exact-xi)
     plt.plot(x,xi,'r')
     plt.plot(x,exact,'g--')
     plt.show()
     
 
-def runAll(N, show_anim = False):
-    solvers = ["cg", "jacobi", "lu", "analytical"]
+def compute_error(xi,u_exact):
+    error = nplg.norm(xi - u_exact)/nplg.norm(u_exact)
+    return error
 
-    for solver in solvers:
-        
-        xi,x = run_sim(N, show_animation=show_anim, solver=solver)
-        if show_anim:
-            plot_exact(xi,x)
+def runAll():
+    meshs = np.array([2000,3000,4000,5000,6000,7000,8000])
+    solvers = np.array(["cg", "lu"])
+    errors = np.empty((solvers.shape[0],meshs.shape[0]))
+    
+    for i,solver in enumerate(solvers):
+        for j,N in enumerate(meshs):
+            xi,x = run_sim(N, solver=solver)
+            u_exact = np.sin(k*x)*np.exp(-a*k**2*T)
+            error = compute_error(xi,u_exact)
+            errors[i][j] = error
+
+    return meshs, errors, solvers
+
+
+def plot_convergence(meshs, errors, solvers):
+    colors = ['r','g']
+    markers = ["o","x"]
+    for i,solver in enumerate(solvers):
+        plt.loglog(meshs, errors[i], label=solver, marker=markers[i], color=colors[i])
+    plt.grid(visible=True)
+    plt.xlabel('mesh element size')
+    plt.ylabel('l2 error')
+    plt.legend()
+    plt.savefig("convergence.png")
+    plt.show()
 
 def main():
     np.random.seed(1)
-    meshs = [2000, 4000, 8000]
-    # for N in meshs:
-    #     runAll(N)
-    xi,x = run_sim(16000, show_animation=False, solver="cg")
+
+    
+    # xi,x = run_sim(8000, show_animation=False, solver="lu")
     # plot_exact(xi,x)
+    # u_exact = np.sin(k*x)*np.exp(-a*k**2*T)
+    # error = compute_error(xi, u_exact)
+    # print(error)
+    meshs, errors, solvers = runAll()
+    print(errors)
+    plot_convergence(meshs, errors,solvers)
 
 if __name__ == '__main__':
     main()  
