@@ -132,10 +132,15 @@ def runAll():
 def plot_convergence(meshs, errors, solvers):
     colors = ['r','g']
     markers = ["o","x"]
+    meshinv = 1/meshs
     for i,solver in enumerate(solvers):
-        plt.loglog(meshs, errors[i], label=solver, marker=markers[i], color=colors[i])
+        plt.loglog(meshinv, errors[i], label=solver, marker=markers[i], color=colors[i])
 
-    plt.loglog(meshs,meshs**2)
+    plt.loglog(meshinv,meshinv**2,color='y',label='order ref 2',linestyle='dashed')
+    
+    plt.loglog(meshinv,meshinv**3,color='b',label='order ref 3',linestyle='dashed')
+    
+    plt.loglog(meshinv,meshinv**4,color='c',label='order ref 4',linestyle='dashed')
     plt.grid(visible=True)
     plt.xlabel('mesh element size')
     plt.ylabel('l2 error')
