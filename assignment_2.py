@@ -36,7 +36,7 @@ def my_stiffness_matrix_assembler(x):
         A[i+1, i+1] += 1/h
     return A.tocsr()
 
-k = 10*2*np.pi
+k = 100*2*np.pi
 xl = 0                                 # left end point of interval
 xr = 1 
 a = 1
@@ -115,7 +115,7 @@ def compute_error(xi,u_exact):
     return error
 
 def runAll():
-    meshs = np.array([2000,3000,4000,5000,6000,7000,8000])
+    meshs = np.array([2000,3000,4000,6000,7000,8000])
     solvers = np.array(["cg", "lu"])
     errors = np.empty((solvers.shape[0],meshs.shape[0]))
     
@@ -134,6 +134,8 @@ def plot_convergence(meshs, errors, solvers):
     markers = ["o","x"]
     for i,solver in enumerate(solvers):
         plt.loglog(meshs, errors[i], label=solver, marker=markers[i], color=colors[i])
+
+    plt.loglog(meshs,meshs**2)
     plt.grid(visible=True)
     plt.xlabel('mesh element size')
     plt.ylabel('l2 error')
@@ -145,7 +147,7 @@ def main():
     np.random.seed(1)
 
     
-    # xi,x = run_sim(8000, show_animation=False, solver="lu")
+    # xi,x = run_sim(8000, show_animation=True, solver="lu")
     # plot_exact(xi,x)
     # u_exact = np.sin(k*x)*np.exp(-a*k**2*T)
     # error = compute_error(xi, u_exact)

@@ -18,12 +18,6 @@ def jacobi_setup(A):
     L = spsp.tril(A,k=-1)
     U = spsp.triu(A,k=1)
     Dinv = inv(D)
-    # print(A.toarray())
-    # print(f"U={U.toarray()}")
-    # print(f"D = {D.toarray()}")
-    # print(f"L= {L.toarray()}")
-    # print((U+D+L).toarray())
-    # print(Dinv.toarray())
 
     return Dinv, L+U
     
